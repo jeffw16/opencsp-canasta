@@ -3,7 +3,7 @@ FROM ghcr.io/canastawiki/canasta:latest AS base
 COPY ./LocalSettings.default.php /var/www/mediawiki/w/LocalSettings.default.php
 COPY ./scripts/install-open-csp-canasta-compile.sh /
 COPY ./scripts/install-open-csp-canasta-runtime.sh /
-COPY ./scripts/init-csp-start.sh /
+COPY ./scripts/init-open-csp.sh /
 
 RUN set -x && \
 	cd /var/www/mediawiki/w && \
