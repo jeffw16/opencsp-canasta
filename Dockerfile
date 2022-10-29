@@ -1,8 +1,9 @@
 FROM ghcr.io/canastawiki/canasta:latest AS base
 
 COPY ./LocalSettings.default.php /var/www/mediawiki/w/LocalSettings.default.php
-COPY ./install-open-csp-canasta-compile.sh /tmp/
-COPY ./install-open-csp-canasta-runtime.sh /tmp/
+COPY ./scripts/install-open-csp-canasta-compile.sh /
+COPY ./scripts/install-open-csp-canasta-runtime.sh /
+COPY ./scripts/init-csp-start.sh /
 
 RUN set -x && \
 	cd /var/www/mediawiki/w && \
@@ -18,9 +19,10 @@ RUN set -x && \
 	composer config repositories.38 composer https://gitlab.wikibase.nl/api/v4/group/38/-/packages/composer/
 
 RUN set -x && \
-	cd /tmp && \
+	cd / && \
 	chmod u+x install-open-csp-canasta-compile.sh && \
 	chmod u+x install-open-csp-canasta-runtime.sh && \
+    chmod u+x init-open-csp.sh && \
 	./install-open-csp-canasta-compile.sh /var/www/mediawiki/w
 
 RUN set -x && \

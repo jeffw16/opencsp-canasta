@@ -28,28 +28,32 @@ main ()
 
     validate_mw_path $MW_PATH || exit 1
 
+    if [ $SKIP_STEPS -le $CURRENT_STEP ]; then
+        echo ">>> Step $CURRENT_STEP: Copying files from git"
+        copy_files_from_git
+    fi
+    CURRENT_STEP=$(($CURRENT_STEP+1))
+
     echo "Moving to $MW_PATH"
     cd $MW_PATH || exit 1
 
     if [ $SKIP_STEPS -le $CURRENT_STEP ]; then
-        echo ">>> Step $CURRENT_STEP: Running maintenance scripts"
-        run_maintenance_scripts
+        echo ">>> Step $CURRENT_STEP: Setting up \"LocalSettings.php\""
+        setup_localsettings
     fi
     CURRENT_STEP=$(($CURRENT_STEP+1))
 
     if [ $SKIP_STEPS -le $CURRENT_STEP ]; then
-        echo ">>> Step $CURRENT_STEP: Running PageSync scripts"
-        run_pagesync_scripts
+        echo ">>> Step $CURRENT_STEP: Running composer."
+        do_composer
     fi
     CURRENT_STEP=$(($CURRENT_STEP+1))
 
     if [ $SKIP_STEPS -le $CURRENT_STEP ]; then
-        echo ">>> Step $CURRENT_STEP: Running rebuildData"
-        run_rebuild_data
+        echo ">>> Step $CURRENT_STEP: Running setup scripts."
+        do_composer
     fi
-    CURRENT_STEP=$((CURRENT_STEP+1))
-    
-    chown -R www-data /var/www/mediawiki/w/extensions/Widgets/compiled_templates/ && chmod -R u+rwx /var/www/mediawiki/w/extensions/Widgets/compiled_templates/
+    CURRENT_STEP=$(($CURRENT_STEP+1))
 
     echo "Moving to $OLD_PATH"
     cd $OLD_PATH
@@ -104,31 +108,42 @@ validate_mw_path()
     return 1
 }
 
-run_maintenance_scripts()
+copy_files_from_git()
 {
-    #6. Run the following maintenance scripts:
-    $PHP maintenance/update.php --quick || exit_with_message
-    $PHP extensions/SemanticMediaWiki/maintenance/updateEntityCountMap.php || exit_with_message
-    $PHP extensions/SemanticMediaWiki/maintenance/setupStore.php || exit_with_message
-    $PHP extensions/SemanticMediaWiki/maintenance/rebuildElasticIndex.php || exit_with_message
+    echo "Cloning files from git."
+    $GIT clone https://github.com/Open-CSP/open-csp.git --branch $CSP_BRANCH --single-branch || exit_with_message;
+    echo "Copying files from git to $MW_PATH."
+
+    cp open-csp/composer.local.json $MW_PATH
+    cp -r open-csp/settings $MW_PATH
+    cp -r open-csp/logo $MW_PATH
+    cp -r open-csp/skin $MW_PATH || exit_with_message
+    cp -r open-csp/wsps $MW_PATH || exit_with_message
+
+    echo "removing git repository."
+    rm -rf open-csp
 }
 
-run_pagesync_scripts()
+setup_localsettings()
 {
-    #TODO: Have share file not contain a datetime
-    BOILERPLATE_URL="https://raw.githubusercontent.com/Open-CSP/PageSync-SharedFiles/main/Open-CSP/Installation/PageSync_21-10-2022-12-20-53_2-1-0.zip"
-
-    #7. Run the PageSync maintenance script.
-    $PHP extensions/PageSync/maintenance/WSps.maintenance.php --user 'Open CSP installation script' || exit_with_message
-
-    #8. Install some extra pages to welcome the new users.
-    echo "Installing the Open CSP main page."
-    $PHP extensions/PageSync/maintenance/WSps.maintenance.php --silent --user 'Open CSP installation script' --install-shared-file $BOILERPLATE_URL || exit_with_message
+    # Append to Canasta's settings directory
+    echo '?>' >> CanastaDefaultSettings.php
+    cat settings/CSPSettings.php >> CanastaDefaultSettings.php
+    
+    # Fix Elasticsearch endpoint for Canasta
+    echo "\$GLOBALS['smwgElasticsearchEndpoints'] = [ 'elasticsearch:9200' ];" >> CanastaDefaultSettings.php
+    
+    # Also create the `images/temp` folder if it does not exist yet.
+    mkdir -p images/temp
+    chmod a+rwx images/temp
 }
 
-run_rebuild_data()
+do_composer()
 {
-    $PHP extensions/SemanticMediaWiki/maintenance/rebuildData.php || exit_with_message
+    #5. Add the public WikibaseSolutions repository to your `composer.json` and run `composer update --no-dev` twice to install all required extensions and dependencies.
+    $COMPOSER config repositories.38 composer https://gitlab.wikibase.nl/api/v4/group/38/-/packages/composer/ || exit_with_message
+    $COMPOSER update --no-dev || exit_with_message
+    $COMPOSER update --no-dev || exit_with_message
 }
 
 succes_message()
